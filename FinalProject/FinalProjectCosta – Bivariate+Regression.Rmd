@@ -1,0 +1,207 @@
+---
+title: "Costa Final Project"
+author: "Leo Costa"
+date: "11/20/2021"
+output: html_document
+---
+
+Bivariate Analyses: Multicollinearity
+```{r}
+#Citizenship Status (categorical) and English Language Proficiency (categorical)
+NSL_clean %>%
+  count(language, citizen) %>%
+  group_by(language) %>%
+  mutate(freq = n / sum(n))
+#https://stackoverflow.com/questions/24576515/relative-frequencies-proportions-with-dplyr
+ggplot(NSL_clean, aes(language, fill = citizen)) +
+  geom_bar() +
+  labs(title = "Relationship Between English Language Proficiency and Citizenship Status", y = "Count", x = "English Language Proficiency", fill = "Citizenship Status")
+
+#English Language Proficiency (categorical) and Experiences of Discrimination (numerical)
+ggplot(NSL_clean, aes(language, discrimination, color = language)) +
+  geom_boxplot() + 
+  geom_jitter(size = 1, alpha = .4) +
+  theme(legend.position = "none") +
+  labs(title = "Relationship Between English Language Proficiency and Experiences of\nDiscrimination", x = "English Language Proficiency", y = "Experiences of Discrimination")
+
+#Experiences of Discrimination (numerical) and Citizenship Status (categorical)
+ggplot(NSL_clean, aes(x = reorder(citizen, discrimination, FUN = median), y = discrimination, color = citizen)) +
+  geom_boxplot() + 
+  geom_jitter(size = 1, alpha = .4) +
+  theme(legend.position = "none") +
+  labs(title = "Relationship Between Experiences of Discrimination and Citizenship Status", x = "Citizenship Status", y = "Experiences of Discrimination")
+```
+
+
+Bivariate Analyses: [Negative] Opinion of Trump (numerical)
+```{r}
+#Citizenship Status (categorical)
+NSL_clean %>% group_by(citizen) %>%
+  summarize(median = median(trump, na.rm = TRUE),
+            min = min(trump, na.rm = TRUE),
+            max = max(trump, na.rm = TRUE),
+            IQR = IQR(trump, na.rm = TRUE))
+ggplot(NSL_clean, aes(citizen, trump, color = citizen)) +
+  geom_boxplot() + 
+  geom_jitter(size = 1, alpha = .4) +
+  theme(legend.position = "none") +
+  labs(title = "Relationship Between [Negative] Opinion of Trump and Citizenship Status", x = "Citizenship Status", y = "[Negative] Opinion of Trump")
+
+#English Language Proficiency (categorical)
+NSL_clean %>% group_by(language) %>%
+  summarize(median = median(trump, na.rm = TRUE),
+            min = min(trump, na.rm = TRUE),
+            max = max(trump, na.rm = TRUE),
+            IQR = IQR(trump, na.rm = TRUE))
+ggplot(NSL_clean, aes(language, trump, color = language)) +
+  geom_boxplot() + 
+  geom_jitter(size = 1, alpha = .4) +
+  theme(legend.position = "none") +
+  labs(title = "Relationship Between [Negative] Opinion of Trump and English\nLanguage Proficiency", x = "English Language Proficiency", y = "[Negative] Opinion of Trump")
+
+#Experiences of Discrimination (numerical)
+cor(NSL_clean$trump, NSL_clean$discrimination, use = "complete.obs")
+ggplot(NSL_clean, aes(trump, discrimination)) + 
+  geom_jitter() +
+  geom_smooth(method = "lm", se = FALSE) + 
+  labs(title = "Relationship Between [Negative] Opinion of Trump and Experiences of\nDiscrimination", x = "[Negative] Opinion of Trump", y = "Experiences of Discrimination")
+```
+Regression Model: [Negative] Opinion of Trump (numerical)
+```{r}
+NSL_clean$citizen <- relevel(NSL_clean$citizen, "Natural Born Citizen")
+
+modelfit_trump_1 <- lm(formula = trump ~ citizen + language + discrimination, data = NSL_clean)
+par(mfrow = c(2, 2))
+plot(modelfit_trump_1)
+summary(modelfit_trump_1)
+
+modelfit_trump_2 <- lm(formula = log(3 - trump) ~ citizen + language + log(discrimination + 1), data = NSL_clean)
+par(mfrow = c(2, 2))
+plot(modelfit_trump_2)
+summary(modelfit_trump_2)
+
+modelfit_trump_3 <- lm(formula = log(3 - trump) ~ citizen + log(discrimination + 1), data = NSL_clean)
+par(mfrow = c(2, 2))
+plot(modelfit_trump_3)
+summary(modelfit_trump_3)
+
+AIC(modelfit_trump_1) #I was helping my friend with her own R project (for another class) and saw this is how she calculated AIC
+AIC(modelfit_trump_2)
+AIC(modelfit_trump_3)
+```
+
+Bivariate Analyses: Political Party (categorical)
+```{r}
+#Citizenship Status (categorical)
+NSL_clean %>%
+  count(party, citizen) %>%
+  group_by(party) %>%
+  mutate(freq = n / sum(n))
+ggplot(NSL_clean, aes(party, fill = citizen)) +
+  geom_bar() +
+  labs(title = "Relationship Between Political Party and Citizenship Status", x = "Party", y = "Count", fill = "Citizenship Status")
+
+#English Language Proficiency (numerical)
+NSL_clean %>%
+  count(party, language) %>%
+  group_by(party) %>%
+  mutate(freq = n / sum(n))
+ggplot(NSL_clean, aes(party, fill = language)) +
+  geom_bar() +
+  labs(title = "Relationship Between Political Party and English Language Proficiency", x = "Political Party", y = "Count", fill = "English Language Proficiency")
+
+#Experiences of Discrimination (numerical)
+NSL_clean %>% group_by(party) %>%
+  summarize(median = median(discrimination, na.rm = TRUE),
+            min = min(discrimination, na.rm = TRUE),
+            max = max(discrimination, na.rm = TRUE),
+            IQR = IQR(discrimination, na.rm = TRUE))
+ggplot(NSL_clean, aes(x = reorder(party, discrimination, FUN = median), y = discrimination, color = party)) +
+  geom_boxplot() + 
+  geom_jitter(size = 1, alpha = .4) +
+  theme(legend.position = "none") +
+  labs(title = "Relationship Between Political Party and Experiences of Discrimination", x = "Party", y = "Experiences of Discrimination")
+```
+Regression Model: Political Party (categorical) -- Multinomial Logistic Regression
+```{r}
+NSL_clean$party <- relevel(NSL_clean$party, "Independent")
+
+modelfit_party_1 <- multinom_reg() %>% #specify model – logistic
+  set_engine("nnet") %>% #computational engine – glm 
+  set_mode("classification") %>% #specify mode – classification 	
+	fit(party ~ citizen + language + discrimination, data = NSL_clean) #specify formula 
+#https://parsnip.tidymodels.org/reference/multinom_reg.html 
+
+modelfit_party_1
+
+test1 <- multinom(party ~ citizen + language + discrimination, data = NSL_clean)
+summary(test1)
+test1_z <- summary(test1)$coefficients/summary(test1)$standard.errors
+test1_p <- (1 - pnorm(abs(test1_z), 0, 1)) * 2
+test1_p
+
+test2 <- multinom(party ~ citizen + language + log(discrimination + 1), data = NSL_clean)
+summary(test2)
+test2_z <- summary(test2)$coefficients/summary(test2)$standard.errors
+test2_p <- (1 - pnorm(abs(test2_z), 0, 1)) * 2
+test2_p
+
+AIC(test1)
+AIC(test2)
+```
+
+
+Bivariate Analyses: [Conservative] Immigration Policy Stance (numerical)
+```{r}
+#Citizenship Status (categorical)
+NSL_clean %>% group_by(citizen) %>%
+  summarize(median = median(immigration, na.rm = TRUE),
+            min = min(immigration, na.rm = TRUE),
+            max = max(immigration, na.rm = TRUE),
+            IQR = IQR(immigration, na.rm = TRUE))
+ggplot(NSL_clean, aes(x = reorder(citizen, immigration, FUN = median), y = immigration, color = citizen)) +
+  geom_boxplot() + 
+  geom_jitter(size = 1, alpha = .4) +
+  theme(legend.position = "none") +
+  labs(title = "Relationship Between Citizenship Status and [Conservative] Immigration\nPolicy Stance", x = "Citizenship Status", y = "[Conservative] Immigration Policy Stance")
+
+#English Language Proficiency (numerical)
+NSL_clean %>% group_by(language) %>%
+  summarize(median = median(immigration, na.rm = TRUE),
+            min = min(immigration, na.rm = TRUE),
+            max = max(immigration, na.rm = TRUE),
+            IQR = IQR(immigration, na.rm = TRUE))
+ggplot(NSL_clean, aes(language, immigration, color = language)) + 
+  geom_boxplot() + 
+  geom_jitter(size = 1, alpha = .4) +
+  theme(legend.position = "none") +
+  labs(title = "Relationship Between [Conservative] Immigration Policy Stance and\nEnglish Language Proficiency", x = "English Language Proficiency", y = "[Conservative] Immigration Policy Stance")
+
+#Experiences of Discrimination (numerical)
+cor(NSL_clean$immigration, NSL_clean$discrimination, use = "complete.obs")
+ggplot(NSL_clean, aes(immigration, discrimination)) + 
+  geom_jitter() +
+  geom_smooth(method = "lm", se = FALSE) + 
+  labs(title = "Relationship Between Experiences of Discrimination and [Conservative]\nImmigration Policy Stance", x = "Experiences of Discrimination", y = "[Conservative] Immigration Policy Stance")
+```
+Regression Model: [Conservative] Immigration Policy Stance (numerical)
+```{r}
+modelfit_immigration_1 <- lm(formula = immigration ~ citizen + language + discrimination, data = NSL_clean)
+par(mfrow = c(2, 2))
+plot(modelfit_immigration_1)
+summary(modelfit_immigration_1)
+
+modelfit_immigration_2 <- lm(formula = log(immigration + 1) ~ citizen + language + log(discrimination + 1), data = NSL_clean)
+par(mfrow = c(2, 2))
+plot(modelfit_immigration_2)
+summary(modelfit_immigration_2)
+
+modelfit_immigration_3 <- lm(formula = log(immigration + 1) ~ citizen + log(discrimination + 1), data = NSL_clean)
+par(mfrow = c(2, 2))
+plot(modelfit_immigration_3)
+summary(modelfit_immigration_3)
+
+AIC(modelfit_immigration_1)
+AIC(modelfit_immigration_2)
+AIC(modelfit_immigration_3)
+```
