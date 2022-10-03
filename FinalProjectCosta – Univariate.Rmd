@@ -1,0 +1,201 @@
+---
+title: "Costa Final Project"
+author: "Leo Costa"
+date: "11/20/2021"
+output: html_document
+---
+
+```{r, include = false}
+library(tidyverse)
+library(dplyr)
+library(haven)
+library(parsnip)
+library(nnet)
+
+NSL <- read_sav("NSL.sav")
+#View(NSL)
+#names(NSL)
+```
+
+Univariate Analyses: Predictor Variables: Citizenship Status
+```{r}
+summary(NSL$qn9)
+table(NSL$qn9)
+NSL$qn9[is.na(NSL$qn9)] <- 3
+NSL$qn9[NSL$qn9 == 9] <- NA
+
+NSL$qn9 <- as.factor(NSL$qn9)
+levels(NSL$qn9)[levels(NSL$qn9)=="1"] <- "Naturalized Citizen"
+levels(NSL$qn9)[levels(NSL$qn9)=="2"] <- "Non-citizen"
+levels(NSL$qn9)[levels(NSL$qn9)=="3"] <- "Natural Born Citizen"
+
+table(NSL$qn9)
+prop.table(table(NSL$qn9))
+
+ggplot(NSL, aes(qn9)) + 
+  geom_bar() + 
+  labs(title = "Citizenship Status", subtitle = "Are you a citizen of the United States?", x = "Response", y = "Count")
+```
+
+Univariate Analyses: Predictor Variables: English Language Proficiency
+lower numbers correspond to lower proficiency
+```{r}
+table(NSL$qnlan3) 
+
+NSL$qnlan3 <- as.factor(NSL$qnlan3)
+levels(NSL$qnlan3)[levels(NSL$qnlan3)=="1"] <- "Proficient" #Very well
+levels(NSL$qnlan3)[levels(NSL$qnlan3)=="2"] <- "Proficient" #Pretty well
+levels(NSL$qnlan3)[levels(NSL$qnlan3)=="3"] <- "Not proficient" #Just a little
+levels(NSL$qnlan3)[levels(NSL$qnlan3)=="4"] <- "Not proficient" #Not at all
+levels(NSL$qnlan3)[levels(NSL$qnlan3)=="8"] <- NA
+levels(NSL$qnlan3)[levels(NSL$qnlan3)=="9"] <- NA # 8: 2, 9: 3
+
+summary(NSL$qnlan3)
+prop.table(table(NSL$qnlan3))
+
+ggplot(NSL, aes(qnlan3)) +
+  geom_bar()
+```
+
+Univariate Analyses: Predictor Variables: Experiences of Discrimination - right skew
+```{r}
+NSL$qn23c[NSL$qn23c == 2] <- 0
+NSL$qn23d[NSL$qn23d == 2] <- 0
+NSL$qn23e[NSL$qn23e == 2] <- 0
+NSL$qn23f[NSL$qn23f == 2] <- 0
+
+table(NSL$qn23c) #8: 2 values
+table(NSL$qn23d) #8: 2 values
+table(NSL$qn23e) #8: 2 values; 9: 2 values 
+table(NSL$qn23f) #8: 9 values; 9: 4 values
+NSL$qn23c[NSL$qn23c == 8 | NSL$qn23c == 9] <- NA
+NSL$qn23d[NSL$qn23d == 8 | NSL$qn23d == 9] <- NA
+NSL$qn23e[NSL$qn23e == 8 | NSL$qn23e == 9] <- NA
+NSL$qn23f[NSL$qn23f == 8 | NSL$qn23f == 9] <- NA
+
+summary(NSL$qn23c) #2 NAs
+#summary(NSL$qn23d) #92 NAs
+summary(NSL$qn23e) #4 NAs
+summary(NSL$qn23f) #13 NAs
+
+#excluding qn23d
+NSL <- NSL %>%
+  mutate(discrimination = (qn23c + qn23e + qn23f))
+
+summary(NSL$discrimination)
+table(NSL$discrimination)
+ggplot(NSL, aes(discrimination)) + 
+  geom_histogram()
+
+ggplot(NSL, aes(log(discrimination + 1))) + 
+  geom_histogram()
+
+log(.4 + 1)
+```
+
+Univariate Analyses: Outcome Variables: [Negative] Opinion of Trump
+```{r}
+table(NSL$qn14a)
+table(NSL$qn17)
+
+NSL$qn14a[NSL$qn14a == 8 | NSL$qn14a == 9] <- NA
+NSL$qn17[NSL$qn17 == 8 | NSL$qn17 == 9] <- NA
+
+NSL$qn14a[NSL$qn14a == 1] <- 0
+NSL$qn14a[NSL$qn14a == 2] <- 1
+summary(NSL$qn14a)
+
+NSL$qn17[NSL$qn17 == 1] <- 0
+NSL$qn17[NSL$qn17 == 2] <- 1
+NSL$qn17[NSL$qn17 == 3] <- 0
+NSL$qn17[NSL$qn17 == 4] <- 0.5
+summary(NSL$qn17)
+
+NSL <- NSL %>% 
+  mutate(trump = (qn14a + qn17))
+table(NSL$trump)
+ggplot(NSL, aes(trump)) + 
+  geom_bar()
+```
+
+Univariate Analyses: Outcome Variables: Political Party
+```{r}
+table(NSL$party)
+NSL$party <- as.factor(NSL$party)
+levels(NSL$party)[levels(NSL$party)=="1"] <- "Republican"
+levels(NSL$party)[levels(NSL$party)=="2"] <- "Democrat"
+levels(NSL$party)[levels(NSL$party)=="3"] <- "Independent"
+levels(NSL$party)[levels(NSL$party)=="4"] <- "Ambivalent" #No preference
+levels(NSL$party)[levels(NSL$party)=="5"] <- NA #Other party
+levels(NSL$party)[levels(NSL$party)=="8"] <- "Ambivalent" #Don’t know
+levels(NSL$party)[levels(NSL$party)=="9"] <- NA #Refused
+table(NSL$party)
+prop.table(table(NSL$party))
+
+ggplot(NSL, aes(party)) + 
+  geom_bar() + 
+  labs(title = "Political Party", subtitle = "In politics today, do you consider yourself a Republican, Democrat, or Independent?", x = "Response", y = "Count")
+```
+
+Univariate Analyses: Outcome Variables: [Conservative] Immigration Policy Stance -- right skew
+higher numbers indicate a more conservative stance
+```{r}
+summary(NSL$qn28)
+summary(NSL$qn29)
+#summary(NSL$qn31) #excluded from analyses
+
+NSL$qn28[NSL$qn28 == 8 | NSL$qn28 == 9] <- NA
+NSL$qn29[NSL$qn29 == 8 | NSL$qn29 == 9] <- NA
+#NSL$qn31[NSL$qn31 == 8 | NSL$qn31 == 9] <- NA
+
+NSL$qn28[NSL$qn28 == 1] <- 0
+NSL$qn28[NSL$qn28 == 2] <- 1
+
+NSL$qn29[NSL$qn29 == 2] <- 0
+
+#NSL$qn31[NSL$qn31 == 2] <- 0
+#NSL$qn31[NSL$qn31 == 3] <- 0
+
+
+# NSL <- NSL %>% 
+#   mutate(immigration = (qn28 + qn29 + qn31))
+
+NSL <- NSL %>%
+  mutate(immigration = (qn28 + qn29))
+
+summary(NSL$immigration)
+
+ggplot(NSL, aes(immigration)) + 
+  geom_bar()
+```
+
+Cleaning the Dataset
+```{r}
+sample_NSL <- NSL %>% 
+  select(citizen = qn9, language = qnlan3, discrimination, trump, party, immigration)
+#View(sample_NSL)
+summary(sample_NSL)
+
+aggregate(formula = sample_NSL$immigration ~ sample_NSL$citizen, FUN = length)
+
+#observing the NA data
+sample_NSL %>% 
+  filter(is.na(citizen))
+sample_NSL %>% 
+  filter(is.na(language)) #mostly naturalized citizens, Independents/Democrats
+sample_NSL %>% 
+  filter(is.na(discrimination)) #mostly natural born citizens, Independents/Democrats, negative opinions of trump
+sample_NSL %>% 
+  filter(is.na(trump))
+sample_NSL %>%
+  filter(is.na(party))
+sample_NSL %>% 
+  filter(is.na(immigration))
+
+#making a dataset with no missing data
+NSL_clean <- sample_NSL %>% 
+  drop_na()
+
+summary(NSL_clean)
+write.csv(NSL_clean, file = "NSL_clean")
+```
